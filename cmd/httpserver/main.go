@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/rmdevio/httpserver/internal/headers"
@@ -94,10 +98,34 @@ func main() {
 					return
 				}
 			}
+		} else if req.RequestLine.RequestTarget == "/compressed" {
+			encodingHeader := req.Headers.Get("Accept-Encoding")
+			if len(encodingHeader) != 0 {
+				headerParts := strings.Split(encodingHeader, ", ")
+				gzipHeaderFound := slices.Contains(headerParts, "gzip")
+
+				if gzipHeaderFound {
+					h.Replace("Content-Type", "text/plain")
+					h.Set("Content-Encoding", "gzip")
+				}
+
+				buf := bytes.NewBuffer([]byte{})
+				zw := gzip.NewWriter(buf)
+				zw.Write(response.RespondOK())
+				zw.Flush()
+				zw.Close()
+
+				body = buf.Bytes()
+			}
 		}
 
 		h.Replace("Content-Length", strconv.Itoa(len(body)))
 		w.WriteStatusLine(statusCode)
+
+		connHeader := req.Headers.Get("Connection")
+		if len(connHeader) != 0 && connHeader == "close" {
+			h.Replace("Connection", "close")
+		}
 		w.WriteHeaders(h)
 		w.WriteBody(body)
 	})

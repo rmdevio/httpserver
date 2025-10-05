@@ -47,6 +47,7 @@ func (s *Server) listen() {
 			return
 		}
 
+		fmt.Printf("Accepted new connection: %s\n", conn.RemoteAddr().String())
 		go s.handle(conn)
 	}
 }
@@ -58,13 +59,22 @@ func (s *Server) Close() {
 func (s *Server) handle(conn io.ReadWriteCloser) {
 	defer conn.Close()
 
-	responseWriter := response.NewWriter(conn)
-	req, err := request.RequestFromReader(conn)
-	if err != nil {
-		responseWriter.WriteStatusLine(response.StatusBadRequest)
-		responseWriter.WriteHeaders(response.GetDefaultHeaders(0))
-		return
+	for {
+		responseWriter := response.NewWriter(conn)
+		req, err := request.RequestFromReader(conn)
+		if err != nil {
+			responseWriter.WriteStatusLine(response.StatusBadRequest)
+			responseWriter.WriteHeaders(response.GetDefaultHeaders(0))
+			return
+		}
+
+		s.handler(responseWriter, req)
+
+		connHeader := req.Headers.Get("Connection")
+		if len(connHeader) != 0 && connHeader == "close" {
+			break
+		}
 	}
 
-	s.handler(responseWriter, req)
+	fmt.Printf("Channel closed for connection: %s\n", conn.(net.Conn).RemoteAddr().String())
 }
