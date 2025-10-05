@@ -63,6 +63,11 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	return n, err
 }
 
+func (w *Writer) WriteChunkedBody(reader io.Reader) (int64, error) {
+	n, err := io.Copy(w.writer, reader)
+	return n, err
+}
+
 func GetDefaultHeaders(contentLength int) *headers.Headers {
 	h := headers.NewHeaders()
 	h.Set("Content-Length", strconv.Itoa(contentLength))
